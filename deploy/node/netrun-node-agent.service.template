@@ -1,0 +1,20 @@
+[Unit]
+Description=NETRUN Node Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/netrun
+Environment=NODE_AGENT_HOST=0.0.0.0
+Environment=NODE_AGENT_PORT=8085
+Environment=NODE_AGENT_PROXY_ROOT=/opt/netrun/proxyserver
+Environment=NODE_AGENT_JOBS_ROOT=/opt/netrun/jobs
+ExecStart=/usr/bin/node /opt/netrun/node_runtime/node_agent/server.js
+Restart=always
+RestartSec=3
+LimitNOFILE=262144
+TasksMax=32768
+
+[Install]
+WantedBy=multi-user.target
