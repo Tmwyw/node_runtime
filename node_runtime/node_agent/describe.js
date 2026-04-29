@@ -30,7 +30,7 @@ async function buildDescribe({ healthSnapshot, jobsRoot, proxyRoot } = {}) {
     proxy_root: proxyRoot || process.env.NODE_AGENT_PROXY_ROOT || "/opt/netrun/proxyserver",
     supports: {
       describe: true,
-      accounting: false,
+      accounting: true,
       enroll: true,
     },
   };
