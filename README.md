@@ -66,6 +66,55 @@ Returns a single JSON snapshot the orchestrator consumes via `POST /v1/nodes/enr
 
 Open access (mirrors `/health`); set `NODE_AGENT_API_KEY` only if you want auth on the write endpoints.
 
+## Pay-per-GB endpoints (Wave B-8.1)
+
+Three endpoints expose per-port nftables traffic accounting and 3proxy
+instance lifecycle for pay-per-GB billing:
+
+```bash
+# Get cumulative byte counters for ports 32001 and 32002
+curl "http://127.0.0.1:8085/accounting?ports=32001,32002" | jq .
+
+# Disable (kill 3proxy instance) for port 32001
+curl -X POST http://127.0.0.1:8085/accounts/32001/disable
+
+# Re-enable (restart 3proxy instance) for port 32001
+curl -X POST http://127.0.0.1:8085/accounts/32001/enable
+```
+
+All three endpoints honor `X-API-KEY` if `NODE_AGENT_API_KEY` is set,
+and are idempotent:
+
+- disabling an already-disabled port returns 200 `already_disabled`
+- enabling an already-enabled port returns 200 `already_enabled`
+- operations on unknown ports return 404 `port_not_found`
+- `GET /accounting` on missing ports returns 200 with the port omitted
+  from the response (defensive contract — orchestrator handles partial
+  maps gracefully)
+
+Counter naming convention (in nftables `proxy_accounting` table):
+
+- `proxy_${port}_in`  — IPv4 inbound TCP to port
+- `proxy_${port}_out` — IPv6 outbound from instance
+- `proxy_${port}_in6` — IPv6 inbound to instance
+
+`bytes_in` aggregates `proxy_${port}_in + proxy_${port}_in6`; `bytes_out`
+is `proxy_${port}_out` (ipv6_only deployment, no IPv4 egress).
+
+nftables counters MUST persist across reboot (see `/etc/nftables.conf`
+or `systemctl enable nftables.service` with `nft list ruleset >
+/etc/nftables.conf`); orchestrator polling worker handles counter-reset
+detection but a persistent counter is the smoothest operation.
+
+```bash
+bash scripts/smoke_accounting.sh
+```
+
+Smoke validates `/describe` advertises accounting, plus the negative
+paths (400 missing ports / 404 unknown port / 200 partial empty map).
+Happy-path with a real reserved port is exercised end-to-end by the
+orchestrator integration tests.
+
 ## Smoke Generate
 
 ```bash
