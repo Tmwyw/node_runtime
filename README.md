@@ -48,6 +48,24 @@ Expected health state:
 }
 ```
 
+## Self-describe (for orchestrator enroll)
+
+```bash
+curl http://127.0.0.1:8085/describe | jq .
+```
+
+Returns a single JSON snapshot the orchestrator consumes via `POST /v1/nodes/enroll {agent_url}` — no per-node manual parameters required. Includes:
+
+- `agent_version`, `node_runtime_commit`
+- `capacity`, `max_parallel_jobs`, `max_batch_size`
+- `generator_script` (resolved absolute path)
+- `geo_code` (ISO 3166-1 alpha-2, cached 1h via ipapi.co)
+- `ipv6`, `ipv6_egress` (same shape as `/health`)
+- `api_key_required`, `jobs_root`, `proxy_root`
+- `supports.{describe,enroll,accounting}`
+
+Open access (mirrors `/health`); set `NODE_AGENT_API_KEY` only if you want auth on the write endpoints.
+
 ## Smoke Generate
 
 ```bash

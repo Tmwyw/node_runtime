@@ -5,6 +5,7 @@ const fsp = require("fs/promises");
 const path = require("path");
 const net = require("net");
 const https = require("https");
+const { buildDescribe } = require("./describe.js");
 
 const PORT = Number(process.env.NODE_AGENT_PORT || 8085);
 const API_KEY = String(process.env.NODE_AGENT_API_KEY || "").trim();
@@ -2604,12 +2605,40 @@ async function handleHealth(req, res) {
   });
 }
 
+async function handleDescribe(req, res) {
+  let healthSnapshot = null;
+  try {
+    const ipv6Check = await checkIpv6Egress(DEFAULT_IPV6_EGRESS_URL, 5000);
+    const ipv6 = {
+      ok: ipv6Check.ok,
+      target: ipv6Check.target,
+      error: ipv6Check.error,
+      statusCode: ipv6Check.statusCode,
+      body: ipv6Check.body,
+    };
+    healthSnapshot = { ipv6, ipv6Egress: ipv6 };
+  } catch (_err) {
+    healthSnapshot = null;
+  }
+  const payload = await buildDescribe({
+    healthSnapshot,
+    jobsRoot: JOBS_ROOT,
+    proxyRoot: PROXY_ROOT,
+  });
+  sendJson(res, 200, payload);
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
   const pathname = url.pathname;
 
   if (req.method === "GET" && pathname === "/health") {
     await handleHealth(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/describe") {
+    await handleDescribe(req, res);
     return;
   }
 
