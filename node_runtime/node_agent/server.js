@@ -6,6 +6,7 @@ const path = require("path");
 const net = require("net");
 const https = require("https");
 const { buildDescribe } = require("./describe.js");
+const accounting = require("./accounting.js");
 
 const PORT = Number(process.env.NODE_AGENT_PORT || 8085);
 const API_KEY = String(process.env.NODE_AGENT_API_KEY || "").trim();
@@ -2665,6 +2666,60 @@ const server = http.createServer(async (req, res) => {
   if ((req.method === "GET" || req.method === "POST") && pathname === "/reconcile") {
     await handleReconcile(req, res);
     return;
+  }
+
+  if (req.method === "GET" && pathname === "/accounting") {
+    if (!ensureAuthorized(req)) {
+      return sendJson(res, 401, { success: false, error: "unauthorized" });
+    }
+    const portsParam = url.searchParams.get("ports") || "";
+    const ports = portsParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => Number(s))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    if (ports.length === 0) {
+      return sendJson(res, 400, {
+        success: false,
+        error: "missing_ports",
+        detail: "comma-separated ports required",
+      });
+    }
+    try {
+      const counters = await accounting.getCountersForPorts(ports);
+      return sendJson(res, 200, { success: true, counters });
+    } catch (err) {
+      return sendJson(res, 500, {
+        success: false,
+        error: "nftables_error",
+        detail: String((err && err.message) || err),
+      });
+    }
+  }
+
+  const accountsActionMatch = /^\/accounts\/(\d+)\/(disable|enable)$/.exec(pathname);
+  if (req.method === "POST" && accountsActionMatch) {
+    if (!ensureAuthorized(req)) {
+      return sendJson(res, 401, { success: false, error: "unauthorized" });
+    }
+    const port = Number(accountsActionMatch[1]);
+    const action = accountsActionMatch[2];
+    try {
+      const result = action === "disable"
+        ? await accounting.disablePort(port)
+        : await accounting.enablePort(port);
+      return sendJson(res, 200, { success: true, port, ...result });
+    } catch (err) {
+      if (err && err.code === "PORT_NOT_FOUND") {
+        return sendJson(res, 404, { success: false, error: "port_not_found", port });
+      }
+      return sendJson(res, 500, {
+        success: false,
+        error: action === "disable" ? "disable_failed" : "enable_failed",
+        detail: String((err && err.message) || err),
+      });
+    }
   }
 
   sendJson(res, 404, { success: false, status: "failed", error: "not_found" });
